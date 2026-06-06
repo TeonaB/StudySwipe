@@ -2,6 +2,7 @@ package com.example.studyswipe.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.example.studyswipe.model.User
+import com.example.studyswipe.model.Subject
 import com.example.studyswipe.model.UserRole
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -72,5 +73,22 @@ class AuthViewModel : ViewModel() {
 
     fun resetRegisterState() {
         _registerState.value = AuthResult.Idle
+    }
+
+    // Salvează profilul utilizatorului curent.
+    // .copy() creează o copie a obiectului User, schimbând doar câmpurile specificate.
+    // Celelalte câmpuri (name, email, password, role) rămân identice.
+    fun saveProfile(subjects: Set<Subject>, bio: String) {
+        val updatedUser = _currentUser.value?.copy(
+            subjects = subjects,
+            bio = bio.trim(),
+            isProfileComplete = true
+        ) ?: return
+
+        // Actualizăm utilizatorul și în lista internă
+        val index = _users.indexOfFirst { it.id == updatedUser.id }
+        if (index != -1) _users[index] = updatedUser
+
+        _currentUser.value = updatedUser
     }
 }

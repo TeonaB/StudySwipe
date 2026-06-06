@@ -19,6 +19,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.studyswipe.ui.pages.HomePage
 import com.example.studyswipe.ui.pages.LoginPage
+import com.example.studyswipe.ui.pages.ProfileSetupPage
 import com.example.studyswipe.ui.pages.RegisterPage
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
@@ -27,6 +28,7 @@ import com.example.studyswipe.viewmodel.AuthViewModel
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
+    const val PROFILE_SETUP = "profile_setup"
     const val HOME = "home"
 }
 
@@ -60,7 +62,14 @@ fun StudySwipeApp(modifier: Modifier = Modifier) {
         composable(Routes.LOGIN) {
             LaunchedEffect(loginState) {
                 if (loginState is AuthResult.Success) {
-                    navController.navigate(Routes.HOME) {
+                    // După login, verificăm dacă profilul e completat.
+                    // Dacă nu e (utilizator nou care nu a terminat setup-ul), îl trimitem la ProfileSetup.
+                    val destination = if (currentUser?.isProfileComplete == true) {
+                        Routes.HOME
+                    } else {
+                        Routes.PROFILE_SETUP
+                    }
+                    navController.navigate(destination) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                     authViewModel.resetLoginState()
@@ -88,7 +97,8 @@ fun StudySwipeApp(modifier: Modifier = Modifier) {
         composable(Routes.REGISTER) {
             LaunchedEffect(registerState) {
                 if (registerState is AuthResult.Success) {
-                    navController.navigate(Routes.HOME) {
+                    // După Register mergem la ProfileSetup, nu direct la Home.
+                    navController.navigate(Routes.PROFILE_SETUP) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                     authViewModel.resetRegisterState()
@@ -105,6 +115,19 @@ fun StudySwipeApp(modifier: Modifier = Modifier) {
                 onLoginClick = {
                     authViewModel.resetRegisterState()
                     navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Routes.PROFILE_SETUP) {
+            ProfileSetupPage(
+                modifier = modifier,
+                userName = currentUser?.name ?: "",
+                onSaveClick = { subjects, bio ->
+                    authViewModel.saveProfile(subjects, bio)
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.PROFILE_SETUP) { inclusive = true }
+                    }
                 }
             )
         }

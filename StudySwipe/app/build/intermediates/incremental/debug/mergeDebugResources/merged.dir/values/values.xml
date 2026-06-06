@@ -157,7 +157,7 @@
     <string name="google_storage_bucket" translatable="false">project-mobile-studyswipe.firebasestorage.app</string>
     <string name="goto_login" translatable="false">Already have an account? Sign in</string>
     <string name="goto_register" translatable="false">Don\'t have an account? Register here</string>
-    <string name="home_welcome" translatable="false">You\'re in! 🎉</string>
+    <string name="home_welcome" translatable="false">You\'re in!</string>
     <string name="in_progress">In progress</string>
     <string name="indeterminate">Partially checked</string>
     <string name="invalid_email" translatable="false">Please enter a valid email address</string>
@@ -252,7 +252,7 @@
     <string name="template_percent"><ns1:g id="percentage">%1$d</ns1:g> percent.</string>
     <string name="tooltip_description">tooltip</string>
     <string name="tooltip_label">show tooltip</string>
-    <string name="welcome" translatable="false">Welcome to StudySwipe 👋</string>
+    <string name="welcome" translatable="false">Welcome to StudySwipe</string>
     <style name="DialogWindowTheme">
         <item name="android:windowClipToOutline">false</item>
     </style>
@@ -324,23 +324,14 @@
         <attr format="reference" name="fontProviderCerts"/>
         
         <attr name="fontProviderFetchStrategy">
-            <!-- The blocking font fetch works as follows.
-              First, check the local cache, then if the requested font is not cached, request the
-              font from the provider and wait until it is finished.  You can change the length of
-              the timeout by modifying fontProviderFetchTimeout.  If the timeout happens, the
-              default typeface will be used instead. -->
+            
             <enum name="blocking" value="0"/>
-            <!-- The async font fetch works as follows.
-              First, check the local cache, then if the requeted font is not cached, trigger a
-              request the font and continue with layout inflation. Once the font fetch succeeds, the
-              target text view will be refreshed with the downloaded font data. The
-              fontProviderFetchTimeout will be ignored if async loading is specified. -->
+            
             <enum name="async" value="1"/>
         </attr>
         
         <attr format="integer" name="fontProviderFetchTimeout">
-            <!-- A special value for the timeout. In this case, the blocking font fetching will not
-              timeout and wait until a reply is received from the font provider. -->
+            
             <enum name="forever" value="-1"/>
         </attr>
         
