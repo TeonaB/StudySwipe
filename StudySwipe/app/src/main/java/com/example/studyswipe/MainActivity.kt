@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -12,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,6 +21,9 @@ import com.example.studyswipe.ui.pages.HomePage
 import com.example.studyswipe.ui.pages.LoginPage
 import com.example.studyswipe.ui.pages.ProfileSetupPage
 import com.example.studyswipe.ui.pages.RegisterPage
+import com.example.studyswipe.ui.pages.UsersListPage
+import com.example.studyswipe.ui.pages.MatchesListPage
+import com.example.studyswipe.ui.pages.ChatPage
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
 import com.example.studyswipe.viewmodel.AuthViewModel
@@ -30,16 +33,27 @@ object Routes {
     const val REGISTER = "register"
     const val PROFILE_SETUP = "profile_setup"
     const val HOME = "home"
+    const val USERS_LIST = "users_list"
+    const val MATCHES = "matches"
+    const val CHAT = "chat/{matchId}"
 }
 
 class MainActivity : ComponentActivity() {
+    // by viewModels() creeaza ViewModel-ul in contextul Activity-ului
+    // Activity stie automat sa furnizeze Application pentru AndroidViewModel
+    // Asta e mai sigur decat viewModel() in composable pentru AndroidViewModel
+    private val authViewModel: AuthViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             StudySwipeTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    StudySwipeApp(modifier = Modifier.padding(innerPadding))
+                    StudySwipeApp(
+                        modifier = Modifier.padding(innerPadding),
+                        authViewModel = authViewModel
+                    )
                 }
             }
         }
@@ -47,13 +61,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun StudySwipeApp(modifier: Modifier = Modifier) {
+fun StudySwipeApp(
+    modifier: Modifier = Modifier,
+    authViewModel: AuthViewModel
+) {
     val navController: NavHostController = rememberNavController()
-    val authViewModel: AuthViewModel = viewModel()
 
     val loginState by authViewModel.loginState.collectAsState()
     val registerState by authViewModel.registerState.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
+    val allUsers by authViewModel.allUsers.collectAsState()
 
     NavHost(
         navController = navController,
@@ -141,7 +158,44 @@ fun StudySwipeApp(modifier: Modifier = Modifier) {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
+                },
+                onViewUsersClick = {
+                    navController.navigate(Routes.USERS_LIST)
+                },
+                onViewMatchesClick = {
+                    navController.navigate(Routes.MATCHES)
                 }
+            )
+        }
+
+        composable(Routes.USERS_LIST) {
+            UsersListPage(
+                users = allUsers.filter { it.id != currentUser?.id }, // Filter out current user
+                onBackClick = { navController.popBackStack() },
+                onChatClick = { otherUserId ->
+                    authViewModel.startChat(otherUserId) { matchId ->
+                        navController.navigate("chat/$matchId")
+                    }
+                }
+            )
+        }
+
+        composable(Routes.MATCHES) {
+            MatchesListPage(
+                authViewModel = authViewModel,
+                onMatchClick = { matchId ->
+                    navController.navigate("chat/$matchId")
+                },
+                onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.CHAT) { backStackEntry ->
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+            ChatPage(
+                matchId = matchId,
+                authViewModel = authViewModel,
+                onBackClick = { navController.popBackStack() }
             )
         }
     }

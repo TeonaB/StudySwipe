@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,7 +32,9 @@ import com.example.studyswipe.ui.theme.StudySwipeTheme
 fun HomePage(
     modifier: Modifier = Modifier,
     user: User? = null,
-    onLogoutClick: () -> Unit = {}
+    onLogoutClick: () -> Unit = {},
+    onViewUsersClick: () -> Unit = {},
+    onViewMatchesClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -93,8 +96,28 @@ fun HomePage(
         Spacer(modifier = Modifier.height(48.dp))
 
         Button(
+            onClick = onViewUsersClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Vezi toți utilizatorii", fontWeight = FontWeight.SemiBold)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = onViewMatchesClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+        ) {
+            Text("Mesajele mele / Conversații", fontWeight = FontWeight.SemiBold)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
             onClick = onLogoutClick,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(stringResource(R.string.logout), fontWeight = FontWeight.SemiBold)
         }

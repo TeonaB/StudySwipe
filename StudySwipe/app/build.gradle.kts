@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-
+    alias(libs.plugins.ksp)
     id("com.google.gms.google-services")
 }
 
@@ -41,6 +41,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.generateKotlin", "true")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -59,6 +63,14 @@ dependencies {
 
     // ViewModel + LiveData pentru Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
+    // Room - baza de date locala
+    // room-runtime = libraria principala care stie sa citeasca/scrie SQLite
+    // room-ktx = extensii pentru Kotlin (suport pentru suspend functions / coroutines)
+    // room-compiler = genereaza codul SQL automat (e procesat de KSP la compilare)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
