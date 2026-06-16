@@ -24,6 +24,7 @@ import com.example.studyswipe.ui.pages.RegisterPage
 import com.example.studyswipe.ui.pages.UsersListPage
 import com.example.studyswipe.ui.pages.MatchesListPage
 import com.example.studyswipe.ui.pages.ChatPage
+import com.example.studyswipe.ui.pages.SwipePage
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
 import com.example.studyswipe.viewmodel.AuthViewModel
@@ -36,6 +37,7 @@ object Routes {
     const val USERS_LIST = "users_list"
     const val MATCHES = "matches"
     const val CHAT = "chat/{matchId}"
+    const val SWIPE = "swipe"
 }
 
 class MainActivity : ComponentActivity() {
@@ -159,11 +161,11 @@ fun StudySwipeApp(
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 },
-                onViewUsersClick = {
-                    navController.navigate(Routes.USERS_LIST)
-                },
                 onViewMatchesClick = {
                     navController.navigate(Routes.MATCHES)
+                },
+                onViewSwipeClick = {
+                    navController.navigate(Routes.SWIPE)
                 }
             )
         }
@@ -196,6 +198,18 @@ fun StudySwipeApp(
                 matchId = matchId,
                 authViewModel = authViewModel,
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SWIPE) {
+            SwipePage(
+                authViewModel = authViewModel,
+                onBackClick = { navController.popBackStack() },
+                onMatchCreated = {
+                    navController.navigate(Routes.MATCHES) {
+                        popUpTo(Routes.HOME)
+                    }
+                }
             )
         }
     }

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.studyswipe.db.AppDatabase
+import com.example.studyswipe.db.DislikeEntity
+import com.example.studyswipe.db.LikeEntity
 import com.example.studyswipe.db.MatchEntity
 import com.example.studyswipe.db.MessageEntity
 import com.example.studyswipe.db.UserEntity
@@ -17,9 +19,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 sealed class AuthResult {
     object Success : AuthResult()
@@ -51,6 +56,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
+    private val _likesFromMe = MutableStateFlow<List<LikeEntity>>(emptyList())
+    private val _likesToMe = MutableStateFlow<List<LikeEntity>>(emptyList())
+    private val _dislikesFromMe = MutableStateFlow<List<DislikeEntity>>(emptyList())
+
     // Real-time Matches and Chat state streams
     private val _matches = MutableStateFlow<List<MatchEntity>>(emptyList())
     val matches = _matches.asStateFlow()
@@ -63,18 +72,86 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     private var messagesJob: kotlinx.coroutines.Job? = null
 
+    private val swipeDataFlow = combine(
+        _likesFromMe,
+        _likesToMe,
+        _dislikesFromMe,
+        matches
+    ) { likesFrom, likesTo, dislikesFrom, activeMatches ->
+        SwipeData(likesFrom, likesTo, dislikesFrom, activeMatches)
+    }
+
+    val swipeCandidates: StateFlow<List<User>> = combine(
+        allUsers,
+        currentUser,
+        swipeDataFlow
+    ) { all, current, swipeData ->
+        if (current == null) return@combine emptyList<User>()
+
+        val likedIds = swipeData.likesFromMe.map { it.likedId }.toSet()
+        val dislikedIds = swipeData.dislikesFromMe.map { it.dislikedId }.toSet()
+        val matchedUserIds = swipeData.matches.map { match ->
+            if (match.user1Id == current.id) match.user2Id else match.user1Id
+        }.toSet()
+
+        val likersToMeIds = swipeData.likesToMe.map { it.likerId }.toSet()
+
+        all.filter { user ->
+            if (user.id == current.id) return@filter false
+            if (user.id in likedIds) return@filter false
+            if (user.id in dislikedIds) return@filter false
+            if (user.id in matchedUserIds) return@filter false
+
+            when (current.role) {
+                UserRole.STUDENT -> {
+                    user.role == UserRole.TUTOR || user.role == UserRole.BOTH
+                }
+                UserRole.TUTOR -> {
+                    (user.role == UserRole.STUDENT || user.role == UserRole.BOTH) && user.id in likersToMeIds
+                }
+                UserRole.BOTH -> {
+                    true
+                }
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     init {
-        // Automatically sync matches when the logged-in user changes
+        // Automatically sync matches, likes, and dislikes when the logged-in user changes
         viewModelScope.launch {
             currentUser.collect { user ->
                 if (user != null) {
-                    chatDao.getMatchesForUser(user.id).collect {
-                        _matches.value = it
+                    launch {
+                        chatDao.getMatchesForUser(user.id).collect {
+                            _matches.value = it
+                        }
+                    }
+                    launch {
+                        chatDao.getLikesForLiker(user.id).collect {
+                            _likesFromMe.value = it
+                        }
+                    }
+                    launch {
+                        chatDao.getLikesForLiked(user.id).collect {
+                            _likesToMe.value = it
+                        }
+                    }
+                    launch {
+                        chatDao.getDislikesForDisliker(user.id).collect {
+                            _dislikesFromMe.value = it
+                        }
                     }
                 } else {
                     _matches.value = emptyList()
                     _activeChatMessages.value = emptyList()
                     activeMatchId = null
+                    _likesFromMe.value = emptyList()
+                    _likesToMe.value = emptyList()
+                    _dislikesFromMe.value = emptyList()
                 }
             }
         }
@@ -193,6 +270,66 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         _registerState.value = AuthResult.Idle
     }
 
+    fun likeUser(candidateId: String, onMatchCreated: () -> Unit = {}, onCompleted: () -> Unit = {}) {
+        val currentUserId = _currentUser.value?.id ?: return
+        val currentUserRole = _currentUser.value?.role ?: return
+
+        viewModelScope.launch {
+            try {
+                val hasLikedMe = chatDao.getLike(likerId = candidateId, likedId = currentUserId) != null
+
+                val shouldMatch = when (currentUserRole) {
+                    UserRole.STUDENT -> hasLikedMe
+                    UserRole.TUTOR -> true
+                    UserRole.BOTH -> hasLikedMe
+                }
+
+                if (shouldMatch) {
+                    val match = MatchEntity(user1Id = currentUserId, user2Id = candidateId)
+                    chatDao.insertMatch(match)
+                    // Delete likes in both directions to ensure no data is left behind in liked section
+                    chatDao.deleteLike(likerId = candidateId, likedId = currentUserId)
+                    chatDao.deleteLike(likerId = currentUserId, likedId = candidateId)
+                    
+                    withContext(Dispatchers.Main) {
+                        onMatchCreated()
+                    }
+                } else {
+                    chatDao.insertLike(LikeEntity(likerId = currentUserId, likedId = candidateId))
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                withContext(Dispatchers.Main) {
+                    onCompleted()
+                }
+            }
+        }
+    }
+
+    fun dislikeUser(candidateId: String, onCompleted: () -> Unit = {}) {
+        val currentUserId = _currentUser.value?.id ?: return
+
+        viewModelScope.launch {
+            try {
+                chatDao.insertDislike(DislikeEntity(dislikerId = currentUserId, dislikedId = candidateId))
+                chatDao.deleteLike(likerId = candidateId, likedId = currentUserId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                withContext(Dispatchers.Main) {
+                    onCompleted()
+                }
+            }
+        }
+    }
+
+    fun deleteMatch(matchId: String) {
+        viewModelScope.launch {
+            chatDao.deleteMatch(matchId)
+        }
+    }
+
     fun resetLoginState() { _loginState.value = AuthResult.Idle }
     fun resetRegisterState() { _registerState.value = AuthResult.Idle }
 }
@@ -231,4 +368,11 @@ fun UserEntity.toUser() = User(
     subjects = subjects,
     bio = bio,
     isProfileComplete = isProfileComplete
+)
+
+private data class SwipeData(
+    val likesFromMe: List<LikeEntity>,
+    val likesToMe: List<LikeEntity>,
+    val dislikesFromMe: List<DislikeEntity>,
+    val matches: List<MatchEntity>
 )

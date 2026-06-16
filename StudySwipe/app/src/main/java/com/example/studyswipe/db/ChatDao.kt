@@ -26,4 +26,28 @@ interface ChatDao {
     
     @Query("SELECT * FROM matches WHERE id = :matchId LIMIT 1")
     suspend fun getMatchById(matchId: String): MatchEntity?
+
+    @Query("DELETE FROM matches WHERE id = :matchId")
+    suspend fun deleteMatch(matchId: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLike(like: LikeEntity): Long
+
+    @Query("DELETE FROM likes WHERE likerId = :likerId AND likedId = :likedId")
+    suspend fun deleteLike(likerId: String, likedId: String): Int
+
+    @Query("SELECT * FROM likes WHERE likerId = :likerId")
+    fun getLikesForLiker(likerId: String): Flow<List<LikeEntity>>
+
+    @Query("SELECT * FROM likes WHERE likedId = :likedId")
+    fun getLikesForLiked(likedId: String): Flow<List<LikeEntity>>
+
+    @Query("SELECT * FROM likes WHERE likerId = :likerId AND likedId = :likedId LIMIT 1")
+    suspend fun getLike(likerId: String, likedId: String): LikeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDislike(dislike: DislikeEntity): Long
+
+    @Query("SELECT * FROM dislikes WHERE dislikerId = :dislikerId")
+    fun getDislikesForDisliker(dislikerId: String): Flow<List<DislikeEntity>>
 }

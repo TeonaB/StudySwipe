@@ -33,8 +33,8 @@ fun HomePage(
     modifier: Modifier = Modifier,
     user: User? = null,
     onLogoutClick: () -> Unit = {},
-    onViewUsersClick: () -> Unit = {},
-    onViewMatchesClick: () -> Unit = {}
+    onViewMatchesClick: () -> Unit = {},
+    onViewSwipeClick: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -84,22 +84,14 @@ fun HomePage(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "SwipeFeed-ul vine în curând! ",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
         Spacer(modifier = Modifier.height(48.dp))
 
         Button(
-            onClick = onViewUsersClick,
-            modifier = Modifier.fillMaxWidth()
+            onClick = onViewSwipeClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
-            Text("Vezi toți utilizatorii", fontWeight = FontWeight.SemiBold)
+            Text("Găsește parteneri", fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -107,7 +99,7 @@ fun HomePage(
         Button(
             onClick = onViewMatchesClick,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
         ) {
             Text("Mesajele mele / Conversații", fontWeight = FontWeight.SemiBold)
         }
