@@ -26,6 +26,7 @@ import com.example.studyswipe.ui.pages.MatchesListPage
 import com.example.studyswipe.ui.pages.ChatPage
 import com.example.studyswipe.ui.pages.SwipePage
 import com.example.studyswipe.ui.pages.MatchCelebrationPage
+import com.example.studyswipe.ui.pages.SettingsPage
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
 import com.example.studyswipe.viewmodel.AuthViewModel
@@ -40,6 +41,7 @@ object Routes {
     const val CHAT = "chat/{matchId}"
     const val SWIPE = "swipe"
     const val MATCH_CELEBRATION = "match_celebration/{matchId}"
+    const val SETTINGS = "settings"
 }
 
 class MainActivity : ComponentActivity() {
@@ -168,6 +170,9 @@ fun StudySwipeApp(
                 },
                 onViewSwipeClick = {
                     navController.navigate(Routes.SWIPE)
+                },
+                onSettingsClick = {
+                    navController.navigate(Routes.SETTINGS)
                 }
             )
         }
@@ -230,6 +235,14 @@ fun StudySwipeApp(
                         popUpTo(Routes.HOME)
                     }
                 }
+            )
+        }
+
+        composable(Routes.SETTINGS) {
+            SettingsPage(
+                authViewModel = authViewModel,
+                onBackClick = { navController.popBackStack() },
+                onSaveSuccess = { navController.popBackStack() }
             )
         }
     }

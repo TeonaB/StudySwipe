@@ -224,6 +224,60 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateProfile(
+        name: String,
+        email: String,
+        password: String,
+        subjects: Set<Subject>,
+        bio: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val current = _currentUser.value ?: return@launch
+            val emailClean = email.trim().lowercase()
+            
+            // Check if email changed and is already taken
+            if (emailClean != current.email) {
+                val existing = userDao.getByEmail(emailClean)
+                if (existing != null) {
+                    withContext(Dispatchers.Main) {
+                        onError("Un cont cu acest email există deja!")
+                    }
+                    return@launch
+                }
+            }
+
+            val updatedUser = current.copy(
+                name = name.trim(),
+                email = emailClean,
+                password = password,
+                subjects = subjects,
+                bio = bio.trim()
+            )
+
+            try {
+                userDao.update(updatedUser.toEntity())
+
+                // Sync subjects Many-to-Many junction table
+                subjectDao.deleteUserSubjects(current.id)
+                subjects.forEach { subject ->
+                    subjectDao.insertUserSubject(UserSubjectEntity(current.id, subject.name))
+                }
+
+                _currentUser.value = updatedUser
+                withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    onError("Eroare la actualizarea profilului: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
     // Matches and messaging logic
     fun selectMatch(matchId: String) {
         activeMatchId = matchId
@@ -346,9 +400,7 @@ fun UserWithSubjects.toUser() = User(
     email = user.email,
     password = user.password,
     role = user.role,
-    subjects = subjects.mapNotNull { entity ->
-        Subject.entries.find { it.name == entity.id }
-    }.toSet(),
+    subjects = user.subjects,
     bio = user.bio,
     isProfileComplete = user.isProfileComplete
 )
