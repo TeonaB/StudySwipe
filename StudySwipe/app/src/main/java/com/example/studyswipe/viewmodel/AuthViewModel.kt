@@ -104,13 +104,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
             when (current.role) {
                 UserRole.STUDENT -> {
-                    user.role == UserRole.TUTOR || user.role == UserRole.BOTH
+                    (user.role == UserRole.TUTOR || user.role == UserRole.BOTH) &&
+                            user.subjects.intersect(current.subjects).isNotEmpty()
                 }
                 UserRole.TUTOR -> {
                     (user.role == UserRole.STUDENT || user.role == UserRole.BOTH) && user.id in likersToMeIds
                 }
                 UserRole.BOTH -> {
-                    true
+                    val teachesMySubjects = (user.role == UserRole.TUTOR || user.role == UserRole.BOTH) &&
+                            user.subjects.intersect(current.subjects).isNotEmpty()
+                    val studentLikedMe = (user.role == UserRole.STUDENT || user.role == UserRole.BOTH) &&
+                            user.id in likersToMeIds
+                    teachesMySubjects || studentLikedMe
                 }
             }
         }
@@ -270,7 +275,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         _registerState.value = AuthResult.Idle
     }
 
-    fun likeUser(candidateId: String, onMatchCreated: () -> Unit = {}, onCompleted: () -> Unit = {}) {
+    fun likeUser(candidateId: String, onMatchCreated: (String) -> Unit = {}, onCompleted: () -> Unit = {}) {
         val currentUserId = _currentUser.value?.id ?: return
         val currentUserRole = _currentUser.value?.role ?: return
 
@@ -292,7 +297,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     chatDao.deleteLike(likerId = currentUserId, likedId = candidateId)
                     
                     withContext(Dispatchers.Main) {
-                        onMatchCreated()
+                        onMatchCreated(match.id)
                     }
                 } else {
                     chatDao.insertLike(LikeEntity(likerId = currentUserId, likedId = candidateId))

@@ -66,7 +66,7 @@ fun SwipePage(
     modifier: Modifier = Modifier,
     authViewModel: AuthViewModel,
     onBackClick: () -> Unit = {},
-    onMatchCreated: () -> Unit = {}
+    onMatchCreated: (String) -> Unit = {}
 ) {
     val candidates by authViewModel.swipeCandidates.collectAsState()
     var isProcessing by remember { mutableStateOf(false) }

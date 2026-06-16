@@ -25,6 +25,7 @@ import com.example.studyswipe.ui.pages.UsersListPage
 import com.example.studyswipe.ui.pages.MatchesListPage
 import com.example.studyswipe.ui.pages.ChatPage
 import com.example.studyswipe.ui.pages.SwipePage
+import com.example.studyswipe.ui.pages.MatchCelebrationPage
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
 import com.example.studyswipe.viewmodel.AuthViewModel
@@ -38,6 +39,7 @@ object Routes {
     const val MATCHES = "matches"
     const val CHAT = "chat/{matchId}"
     const val SWIPE = "swipe"
+    const val MATCH_CELEBRATION = "match_celebration/{matchId}"
 }
 
 class MainActivity : ComponentActivity() {
@@ -205,8 +207,26 @@ fun StudySwipeApp(
             SwipePage(
                 authViewModel = authViewModel,
                 onBackClick = { navController.popBackStack() },
-                onMatchCreated = {
-                    navController.navigate(Routes.MATCHES) {
+                onMatchCreated = { matchId ->
+                    navController.navigate("match_celebration/$matchId") {
+                        popUpTo(Routes.SWIPE) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.MATCH_CELEBRATION) { backStackEntry ->
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+            MatchCelebrationPage(
+                matchId = matchId,
+                authViewModel = authViewModel,
+                onStartChatClick = {
+                    navController.navigate("chat/$matchId") {
+                        popUpTo(Routes.MATCH_CELEBRATION) { inclusive = true }
+                    }
+                },
+                onKeepSwipingClick = {
+                    navController.navigate(Routes.SWIPE) {
                         popUpTo(Routes.HOME)
                     }
                 }
