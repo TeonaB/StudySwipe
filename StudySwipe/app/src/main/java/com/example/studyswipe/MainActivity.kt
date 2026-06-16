@@ -27,6 +27,9 @@ import com.example.studyswipe.ui.pages.ChatPage
 import com.example.studyswipe.ui.pages.SwipePage
 import com.example.studyswipe.ui.pages.MatchCelebrationPage
 import com.example.studyswipe.ui.pages.SettingsPage
+import com.example.studyswipe.ui.pages.AdminHomePage
+import com.example.studyswipe.ui.pages.AdminUserListPage
+import com.example.studyswipe.model.UserRole
 import com.example.studyswipe.ui.theme.StudySwipeTheme
 import com.example.studyswipe.viewmodel.AuthResult
 import com.example.studyswipe.viewmodel.AuthViewModel
@@ -42,6 +45,8 @@ object Routes {
     const val SWIPE = "swipe"
     const val MATCH_CELEBRATION = "match_celebration/{matchId}"
     const val SETTINGS = "settings"
+    const val ADMIN_HOME = "admin_home"
+    const val ADMIN_USER_LIST = "admin_user_list/{role}"
 }
 
 class MainActivity : ComponentActivity() {
@@ -85,9 +90,10 @@ fun StudySwipeApp(
         composable(Routes.LOGIN) {
             LaunchedEffect(loginState) {
                 if (loginState is AuthResult.Success) {
-                    // După login, verificăm dacă profilul e completat.
-                    // Dacă nu e (utilizator nou care nu a terminat setup-ul), îl trimitem la ProfileSetup.
-                    val destination = if (currentUser?.isProfileComplete == true) {
+                    // După login, verificăm dacă profilul e completat sau dacă este admin.
+                    val destination = if (currentUser?.role == UserRole.ADMIN) {
+                        Routes.ADMIN_HOME
+                    } else if (currentUser?.isProfileComplete == true) {
                         Routes.HOME
                     } else {
                         Routes.PROFILE_SETUP
@@ -243,6 +249,35 @@ fun StudySwipeApp(
                 authViewModel = authViewModel,
                 onBackClick = { navController.popBackStack() },
                 onSaveSuccess = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.ADMIN_HOME) {
+            AdminHomePage(
+                authViewModel = authViewModel,
+                onLogoutClick = {
+                    authViewModel.logout()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.ADMIN_HOME) { inclusive = true }
+                    }
+                },
+                onNavigateToUserList = { role ->
+                    navController.navigate("admin_user_list/${role.name}")
+                }
+            )
+        }
+
+        composable(Routes.ADMIN_USER_LIST) { backStackEntry ->
+            val roleStr = backStackEntry.arguments?.getString("role") ?: ""
+            val role = try {
+                UserRole.valueOf(roleStr)
+            } catch (e: Exception) {
+                UserRole.STUDENT
+            }
+            AdminUserListPage(
+                authViewModel = authViewModel,
+                role = role,
+                onBackClick = { navController.popBackStack() }
             )
         }
     }

@@ -97,6 +97,7 @@ fun HomePage(
                 UserRole.STUDENT -> " Ești înregistrat ca Student"
                 UserRole.TUTOR -> " Ești înregistrat ca Tutor"
                 UserRole.BOTH -> " Ești înregistrat ca Student și Tutor"
+                UserRole.ADMIN -> " Ești înregistrat ca Administrator"
             }
 
             Text(

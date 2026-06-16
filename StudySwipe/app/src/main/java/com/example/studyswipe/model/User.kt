@@ -1,9 +1,13 @@
 package com.example.studyswipe.model
 
+//Email: admin@studyswipe.com
+//Parolă (Password): admin
+
 enum class UserRole {
     STUDENT,
     TUTOR,
-    BOTH
+    BOTH,
+    ADMIN
 }
 
 // Enum cu toate materiile disponibile în aplicație.

@@ -50,4 +50,13 @@ interface ChatDao {
 
     @Query("SELECT * FROM dislikes WHERE dislikerId = :dislikerId")
     fun getDislikesForDisliker(dislikerId: String): Flow<List<DislikeEntity>>
+
+    @Query("DELETE FROM likes WHERE likerId = :userId OR likedId = :userId")
+    suspend fun deleteLikesForUser(userId: String): Int
+
+    @Query("DELETE FROM dislikes WHERE dislikerId = :userId OR dislikedId = :userId")
+    suspend fun deleteDislikesForUser(userId: String): Int
+
+    @Query("DELETE FROM matches WHERE user1Id = :userId OR user2Id = :userId")
+    suspend fun deleteMatchesForUser(userId: String): Int
 }

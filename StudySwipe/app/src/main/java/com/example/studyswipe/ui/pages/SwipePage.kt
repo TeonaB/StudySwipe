@@ -147,16 +147,19 @@ fun SwipePage(
                             UserRole.STUDENT -> "Student 📚"
                             UserRole.TUTOR -> "Tutor 🎓"
                             UserRole.BOTH -> "Student & Tutor 📚🎓"
+                            UserRole.ADMIN -> "Admin 🛡️"
                         }
                         val roleBadgeColor = when (candidate.role) {
                             UserRole.STUDENT -> MaterialTheme.colorScheme.secondaryContainer
                             UserRole.TUTOR -> MaterialTheme.colorScheme.tertiaryContainer
                             UserRole.BOTH -> MaterialTheme.colorScheme.primaryContainer
+                            UserRole.ADMIN -> MaterialTheme.colorScheme.errorContainer
                         }
                         val roleBadgeTextColor = when (candidate.role) {
                             UserRole.STUDENT -> MaterialTheme.colorScheme.onSecondaryContainer
                             UserRole.TUTOR -> MaterialTheme.colorScheme.onTertiaryContainer
                             UserRole.BOTH -> MaterialTheme.colorScheme.onPrimaryContainer
+                            UserRole.ADMIN -> MaterialTheme.colorScheme.onErrorContainer
                         }
 
                         Surface(

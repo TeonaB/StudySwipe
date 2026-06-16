@@ -117,6 +117,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                             user.id in likersToMeIds
                     teachesMySubjects || studentLikedMe
                 }
+                UserRole.ADMIN -> false
             }
         }
     }.stateIn(
@@ -278,6 +279,79 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteUserByAdmin(userId: String, onCompleted: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                // Delete user relations and junction table entries
+                subjectDao.deleteUserSubjects(userId)
+                chatDao.deleteLikesForUser(userId)
+                chatDao.deleteDislikesForUser(userId)
+                chatDao.deleteMatchesForUser(userId)
+                
+                // Delete user record
+                userDao.deleteById(userId)
+                
+                withContext(Dispatchers.Main) {
+                    onCompleted()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun updateUserProfileByAdmin(
+        targetUserId: String,
+        name: String,
+        email: String,
+        password: String,
+        subjects: Set<Subject>,
+        bio: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val emailClean = email.trim().lowercase()
+            
+            // Check if email changed and is already taken by some OTHER user
+            val existing = userDao.getByEmail(emailClean)
+            if (existing != null && existing.id != targetUserId) {
+                withContext(Dispatchers.Main) {
+                    onError("Un cont cu acest email există deja!")
+                }
+                return@launch
+            }
+
+            val targetEntity = userDao.getById(targetUserId) ?: return@launch
+            val updatedEntity = targetEntity.copy(
+                name = name.trim(),
+                email = emailClean,
+                password = password,
+                subjects = subjects,
+                bio = bio.trim()
+            )
+
+            try {
+                userDao.update(updatedEntity)
+
+                // Sync subjects Many-to-Many junction table
+                subjectDao.deleteUserSubjects(targetUserId)
+                subjects.forEach { subject ->
+                    subjectDao.insertUserSubject(UserSubjectEntity(targetUserId, subject.name))
+                }
+
+                withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    onError("Eroare la actualizarea utilizatorului: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
     // Matches and messaging logic
     fun selectMatch(matchId: String) {
         activeMatchId = matchId
@@ -341,6 +415,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     UserRole.STUDENT -> hasLikedMe
                     UserRole.TUTOR -> true
                     UserRole.BOTH -> hasLikedMe
+                    UserRole.ADMIN -> false
                 }
 
                 if (shouldMatch) {

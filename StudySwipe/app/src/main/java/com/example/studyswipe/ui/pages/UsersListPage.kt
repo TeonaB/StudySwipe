@@ -142,6 +142,7 @@ fun UserCard(
                     UserRole.STUDENT -> "Student 📚"
                     UserRole.TUTOR -> "Tutor 🎓"
                     UserRole.BOTH -> "Student & Tutor 📚🎓"
+                    UserRole.ADMIN -> "Admin 🛡️"
                 }
                 Text(
                     text = roleLabel,

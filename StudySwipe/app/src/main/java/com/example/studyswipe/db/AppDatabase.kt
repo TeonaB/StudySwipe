@@ -49,7 +49,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
-                        // Seed subjects whenever the database is opened
+                        // Seed subjects and admin whenever the database is opened
                         CoroutineScope(Dispatchers.IO).launch {
                             try {
                                 val dbInstance = getInstance(context)
@@ -57,6 +57,19 @@ abstract class AppDatabase : RoomDatabase() {
                                     SubjectEntity(id = it.name, name = it.name, displayName = it.displayName)
                                 }
                                 dbInstance.subjectDao().insertAll(subjectEntities)
+
+                                // Seed admin account
+                                val adminUser = UserEntity(
+                                    id = "admin-fixed-uuid",
+                                    name = "Administrator",
+                                    email = "admin@studyswipe.com",
+                                    password = "admin1",
+                                    role = com.example.studyswipe.model.UserRole.ADMIN,
+                                    subjects = emptySet(),
+                                    bio = "Cont de administrare sistem.",
+                                    isProfileComplete = true
+                                )
+                                dbInstance.userDao().insert(adminUser)
                             } catch (e: Exception) {
                                 e.printStackTrace()
                             }
