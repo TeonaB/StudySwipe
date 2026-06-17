@@ -25,6 +25,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.example.studyswipe.network.RetrofitClient
+import com.example.studyswipe.network.dto.toUser
+
 
 sealed class AuthResult {
     object Success : AuthResult()
@@ -46,6 +49,54 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val loginState: StateFlow<AuthResult> = _loginState.asStateFlow()
     val registerState: StateFlow<AuthResult> = _registerState.asStateFlow()
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+
+    // HTTP API state for remote users
+    private val _apiUsers = MutableStateFlow<List<User>>(emptyList())
+    val apiUsers: StateFlow<List<User>> = _apiUsers.asStateFlow()
+
+    private val _apiLoading = MutableStateFlow(false)
+    val apiLoading: StateFlow<Boolean> = _apiLoading.asStateFlow()
+
+    private val _apiError = MutableStateFlow<String?>(null)
+    val apiError: StateFlow<String?> = _apiError.asStateFlow()
+
+    private val _apiTotalPages = MutableStateFlow(1)
+    val apiTotalPages: StateFlow<Int> = _apiTotalPages.asStateFlow()
+
+    private val _apiCurrentPage = MutableStateFlow(1)
+    val apiCurrentPage: StateFlow<Int> = _apiCurrentPage.asStateFlow()
+
+    fun fetchUsersFromApi(page: Int, role: UserRole) {
+        _apiLoading.value = true
+        _apiError.value = null
+        _apiCurrentPage.value = page
+        
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.usersApi.getUsers(page = page, perPage = 5)
+                val mappedUsers = response.data.map { dto ->
+                    dto.toUser(role)
+                }
+                _apiUsers.value = mappedUsers
+                _apiTotalPages.value = response.totalPages
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _apiError.value = e.localizedMessage ?: "A apărut o eroare la descărcarea utilizatorilor"
+                _apiUsers.value = emptyList()
+            } finally {
+                _apiLoading.value = false
+            }
+        }
+    }
+
+    fun updateApiUser(updatedUser: User) {
+        _apiUsers.value = _apiUsers.value.map { if (it.id == updatedUser.id) updatedUser else it }
+    }
+
+    fun deleteApiUser(userId: String) {
+        _apiUsers.value = _apiUsers.value.filter { it.id != userId }
+    }
+
 
     // Relational Flow mapping users and their subjects
     val allUsers: StateFlow<List<User>> = subjectDao.getUsersWithSubjects()
