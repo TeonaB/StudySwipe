@@ -1,6 +1,7 @@
 package com.example.studyswipe.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.studyswipe.db.AppDatabase
@@ -25,6 +26,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.example.studyswipe.network.RetrofitClient
+import com.example.studyswipe.network.dto.toUser
+
 
 sealed class AuthResult {
     object Success : AuthResult()
@@ -46,6 +50,58 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val loginState: StateFlow<AuthResult> = _loginState.asStateFlow()
     val registerState: StateFlow<AuthResult> = _registerState.asStateFlow()
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
+
+    // HTTP API state for remote users
+    private val _apiUsers = MutableStateFlow<List<User>>(emptyList())
+    val apiUsers: StateFlow<List<User>> = _apiUsers.asStateFlow()
+
+    private val _apiLoading = MutableStateFlow(false)
+    val apiLoading: StateFlow<Boolean> = _apiLoading.asStateFlow()
+
+    private val _apiError = MutableStateFlow<String?>(null)
+    val apiError: StateFlow<String?> = _apiError.asStateFlow()
+
+    private val _apiTotalPages = MutableStateFlow(1)
+    val apiTotalPages: StateFlow<Int> = _apiTotalPages.asStateFlow()
+
+    private val _apiCurrentPage = MutableStateFlow(1)
+    val apiCurrentPage: StateFlow<Int> = _apiCurrentPage.asStateFlow()
+
+    fun fetchUsersFromApi(page: Int, role: UserRole) {
+        _apiLoading.value = true
+        _apiError.value = null
+        _apiCurrentPage.value = page
+        
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.usersApi.getUsers(page = page, perPage = 5)
+                val mappedUsers = response.data.map { dto ->
+                    dto.toUser(role)
+                }
+                
+                // Save to local Room DB on a background thread
+                withContext(Dispatchers.IO) {
+                    mappedUsers.forEach { user ->
+                        userDao.insert(user.toEntity())
+                        subjectDao.deleteUserSubjects(user.id)
+                        user.subjects.forEach { subject ->
+                            subjectDao.insertUserSubject(UserSubjectEntity(user.id, subject.name))
+                        }
+                    }
+                }
+                
+                _apiUsers.value = mappedUsers
+                _apiTotalPages.value = response.totalPages
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _apiError.value = e.localizedMessage ?: "A apărut o eroare la descărcarea utilizatorilor"
+                _apiUsers.value = emptyList()
+            } finally {
+                _apiLoading.value = false
+            }
+        }
+    }
+
 
     // Relational Flow mapping users and their subjects
     val allUsers: StateFlow<List<User>> = subjectDao.getUsersWithSubjects()
@@ -127,6 +183,18 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     init {
+        // Load logged in user from SharedPreferences
+        val prefs = application.getSharedPreferences("StudySwipePrefs", Context.MODE_PRIVATE)
+        val savedUserId = prefs.getString("logged_in_user_id", null)
+        if (savedUserId != null) {
+            viewModelScope.launch {
+                val userWithSubjects = subjectDao.getUserWithSubjectsById(savedUserId)
+                if (userWithSubjects != null) {
+                    _currentUser.value = userWithSubjects.toUser()
+                }
+            }
+        }
+
         // Automatically sync matches, likes, and dislikes when the logged-in user changes
         viewModelScope.launch {
             currentUser.collect { user ->
@@ -183,7 +251,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             
             // Fetch registered UserWithSubjects (empty subjects list initially)
             val userWithSubjects = subjectDao.getUserWithSubjectsById(newUser.id)
-            _currentUser.value = userWithSubjects?.toUser() ?: newUser
+            val user = userWithSubjects?.toUser() ?: newUser
+            
+            val prefs = getApplication<Application>().getSharedPreferences("StudySwipePrefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("logged_in_user_id", user.id).apply()
+
+            _currentUser.value = user
             _registerState.value = AuthResult.Success
         }
     }
@@ -195,7 +268,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val userWithSubjects = subjectDao.getUserWithSubjectsByEmail(email.trim().lowercase())
 
             if (userWithSubjects != null && userWithSubjects.user.password == password) {
-                _currentUser.value = userWithSubjects.toUser()
+                val user = userWithSubjects.toUser()
+                val prefs = getApplication<Application>().getSharedPreferences("StudySwipePrefs", Context.MODE_PRIVATE)
+                prefs.edit().putString("logged_in_user_id", user.id).apply()
+
+                _currentUser.value = user
                 _loginState.value = AuthResult.Success
             } else {
                 _loginState.value = AuthResult.Error("Email sau parolă incorectă!")
@@ -291,6 +368,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 // Delete user record
                 userDao.deleteById(userId)
                 
+                // Also remove from the apiUsers state flow in-memory
+                _apiUsers.value = _apiUsers.value.filter { it.id != userId }
+                
                 withContext(Dispatchers.Main) {
                     onCompleted()
                 }
@@ -338,6 +418,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 subjectDao.deleteUserSubjects(targetUserId)
                 subjects.forEach { subject ->
                     subjectDao.insertUserSubject(UserSubjectEntity(targetUserId, subject.name))
+                }
+
+                // Also update the apiUsers state flow in-memory
+                _apiUsers.value = _apiUsers.value.map {
+                    if (it.id == targetUserId) {
+                        it.copy(
+                            name = name.trim(),
+                            email = emailClean,
+                            password = password,
+                            subjects = subjects,
+                            bio = bio.trim()
+                        )
+                    } else it
                 }
 
                 withContext(Dispatchers.Main) {
@@ -398,9 +491,25 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        val prefs = getApplication<Application>().getSharedPreferences("StudySwipePrefs", Context.MODE_PRIVATE)
+        prefs.edit().remove("logged_in_user_id").apply()
         _currentUser.value = null
         _loginState.value = AuthResult.Idle
         _registerState.value = AuthResult.Idle
+    }
+
+    fun fetchSingleUserDetail(userId: String) {
+        viewModelScope.launch {
+            try {
+                val numericId = userId.substringAfterLast("-").toLongOrNull()
+                if (numericId != null) {
+                    val response = RetrofitClient.usersApi.getUserById(numericId)
+                    println("Fetched single user from API: ${response.data.firstName} ${response.data.lastName}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     fun likeUser(candidateId: String, onMatchCreated: (String) -> Unit = {}, onCompleted: () -> Unit = {}) {
@@ -477,6 +586,7 @@ fun UserWithSubjects.toUser() = User(
     role = user.role,
     subjects = user.subjects,
     bio = user.bio,
+    avatarUrl = user.avatarUrl,
     isProfileComplete = user.isProfileComplete
 )
 
@@ -488,6 +598,7 @@ fun User.toEntity() = UserEntity(
     role = role,
     subjects = subjects, // kept for backwards compatibility in UserDao
     bio = bio,
+    avatarUrl = avatarUrl,
     isProfileComplete = isProfileComplete
 )
 
@@ -499,6 +610,7 @@ fun UserEntity.toUser() = User(
     role = role,
     subjects = subjects,
     bio = bio,
+    avatarUrl = avatarUrl,
     isProfileComplete = isProfileComplete
 )
 

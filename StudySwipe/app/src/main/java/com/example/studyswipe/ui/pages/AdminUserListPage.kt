@@ -21,6 +21,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -67,8 +70,15 @@ fun AdminUserListPage(
     role: UserRole,
     onBackClick: () -> Unit
 ) {
-    val allUsers by authViewModel.allUsers.collectAsState()
-    val filteredUsers = allUsers.filter { it.role == role && it.id != "admin-fixed-uuid" }
+    val apiUsers by authViewModel.apiUsers.collectAsState()
+    val apiLoading by authViewModel.apiLoading.collectAsState()
+    val apiError by authViewModel.apiError.collectAsState()
+    val totalPages by authViewModel.apiTotalPages.collectAsState()
+    val currentPage by authViewModel.apiCurrentPage.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(role) {
+        authViewModel.fetchUsersFromApi(page = 1, role = role)
+    }
 
     var selectedUserForDetails by remember { mutableStateOf<User?>(null) }
     var selectedUserForEdit by remember { mutableStateOf<User?>(null) }
@@ -93,41 +103,116 @@ fun AdminUserListPage(
             )
         }
     ) { innerPadding ->
-        if (filteredUsers.isEmpty()) {
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Niciun cont în această categorie",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                item { Spacer(modifier = Modifier.height(8.dp)) }
-
-                items(filteredUsers, key = { it.id }) { user ->
-                    AdminUserItem(
-                        user = user,
-                        onViewDetails = { selectedUserForDetails = user },
-                        onEdit = { selectedUserForEdit = user },
-                        onDelete = { userToDelete = user }
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
+        ) {
+            if (apiLoading) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
+            } else if (apiError != null) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = apiError ?: "Eroare necunoscută",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { authViewModel.fetchUsersFromApi(currentPage, role) }) {
+                        Text("Reîncearcă")
+                    }
+                }
+            } else if (apiUsers.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Niciun cont în această categorie",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
 
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+                    items(apiUsers, key = { it.id }) { user ->
+                        AdminUserItem(
+                            user = user,
+                            onViewDetails = {
+                                authViewModel.fetchSingleUserDetail(user.id)
+                                selectedUserForDetails = user
+                            },
+                            onEdit = { selectedUserForEdit = user },
+                            onDelete = { userToDelete = user }
+                        )
+                    }
+
+                    item { Spacer(modifier = Modifier.height(16.dp)) }
+                }
+            }
+
+            // Pagination controls row at the bottom
+            if (!apiLoading && apiError == null && apiUsers.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (currentPage > 1) {
+                                authViewModel.fetchUsersFromApi(currentPage - 1, role)
+                            }
+                        },
+                        enabled = currentPage > 1
+                    ) {
+                        Text("Anterior")
+                    }
+
+                    Text(
+                        text = "Pagina $currentPage din $totalPages",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            if (currentPage < totalPages) {
+                                authViewModel.fetchUsersFromApi(currentPage + 1, role)
+                            }
+                        },
+                        enabled = currentPage < totalPages
+                    ) {
+                        Text("Următor")
+                    }
+                }
             }
         }
 
@@ -199,18 +284,29 @@ fun AdminUserItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = user.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            if (user.avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = user.avatarUrl,
+                    contentDescription = "${user.name} avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = user.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
 
