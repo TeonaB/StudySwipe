@@ -88,6 +88,22 @@ fun StudySwipeApp(
         startDestination = Routes.LOGIN
     ) {
         composable(Routes.LOGIN) {
+            LaunchedEffect(currentUser) {
+                val user = currentUser
+                if (user != null) {
+                    val destination = if (user.role == UserRole.ADMIN) {
+                        Routes.ADMIN_HOME
+                    } else if (user.isProfileComplete) {
+                        Routes.HOME
+                    } else {
+                        Routes.PROFILE_SETUP
+                    }
+                    navController.navigate(destination) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                }
+            }
+
             LaunchedEffect(loginState) {
                 if (loginState is AuthResult.Success) {
                     // După login, verificăm dacă profilul e completat sau dacă este admin.

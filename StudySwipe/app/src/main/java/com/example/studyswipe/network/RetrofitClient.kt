@@ -7,11 +7,13 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
     private const val BASE_URL = "https://reqres.in/"
+
     private const val LOCAL_BASE_URL = "http://10.0.2.2:3000"
-    private const val API_KEY = "reqres_d749c612b8334679b7a9da1822ea4c11"
+    private const val API_KEY = "pub_8bbc4417fc23e1363baae08d2e3ddb16df0e97a7501c6765c612325d8d17acce"
 
     private val apiKeyInterceptor = Interceptor { chain ->
         val request = chain
@@ -39,12 +41,18 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient
         .Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .writeTimeout(5, TimeUnit.SECONDS)
         .addInterceptor(apiKeyInterceptor)
         .addInterceptor(loggingInterceptor)
         .build()
 
     private val okHttpClientAuthorized = OkHttpClient
         .Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(5, TimeUnit.SECONDS)
+        .writeTimeout(5, TimeUnit.SECONDS)
         .addInterceptor(apiKeyInterceptor)
         .addInterceptor(authTokenInterceptor)
         .addInterceptor(loggingInterceptor)

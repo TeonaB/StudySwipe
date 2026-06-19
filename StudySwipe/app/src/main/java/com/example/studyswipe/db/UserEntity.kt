@@ -46,5 +46,6 @@ data class UserEntity(
     // Set<Subject> se stocheaza ca String prin TypeConverter-ul de mai sus
     val subjects: Set<Subject>,
     val bio: String,
+    val avatarUrl: String = "",
     val isProfileComplete: Boolean
 )

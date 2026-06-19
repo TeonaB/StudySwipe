@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
         LikeEntity::class,
         DislikeEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -67,6 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
                                     role = com.example.studyswipe.model.UserRole.ADMIN,
                                     subjects = emptySet(),
                                     bio = "Cont de administrare sistem.",
+                                    avatarUrl = "",
                                     isProfileComplete = true
                                 )
                                 dbInstance.userDao().insert(adminUser)

@@ -21,6 +21,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -160,7 +163,10 @@ fun AdminUserListPage(
                     items(apiUsers, key = { it.id }) { user ->
                         AdminUserItem(
                             user = user,
-                            onViewDetails = { selectedUserForDetails = user },
+                            onViewDetails = {
+                                authViewModel.fetchSingleUserDetail(user.id)
+                                selectedUserForDetails = user
+                            },
                             onEdit = { selectedUserForEdit = user },
                             onDelete = { userToDelete = user }
                         )
@@ -237,13 +243,8 @@ fun AdminUserListPage(
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (user.id.toIntOrNull() != null) {
-                                authViewModel.deleteApiUser(user.id)
+                            authViewModel.deleteUserByAdmin(user.id) {
                                 userToDelete = null
-                            } else {
-                                authViewModel.deleteUserByAdmin(user.id) {
-                                    userToDelete = null
-                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -283,18 +284,29 @@ fun AdminUserItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = user.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            if (user.avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = user.avatarUrl,
+                    contentDescription = "${user.name} avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = user.name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
 
@@ -483,35 +495,22 @@ fun AdminUserEditDialog(
                 onClick = {
                     isSaving = true
                     errorMessage = null
-                    if (user.id.toIntOrNull() != null) {
-                        val updatedUser = user.copy(
-                            name = name,
-                            email = email,
-                            password = password,
-                            subjects = selectedSubjects,
-                            bio = bio
-                        )
-                        authViewModel.updateApiUser(updatedUser)
-                        isSaving = false
-                        onSaveSuccess()
-                    } else {
-                        authViewModel.updateUserProfileByAdmin(
-                            targetUserId = user.id,
-                            name = name,
-                            email = email,
-                            password = password,
-                            subjects = selectedSubjects,
-                            bio = bio,
-                            onSuccess = {
-                                isSaving = false
-                                onSaveSuccess()
-                            },
-                            onError = {
-                                isSaving = false
-                                errorMessage = it
-                            }
-                        )
-                    }
+                    authViewModel.updateUserProfileByAdmin(
+                        targetUserId = user.id,
+                        name = name,
+                        email = email,
+                        password = password,
+                        subjects = selectedSubjects,
+                        bio = bio,
+                        onSuccess = {
+                            isSaving = false
+                            onSaveSuccess()
+                        },
+                        onError = {
+                            isSaving = false
+                            errorMessage = it
+                        }
+                    )
                 },
                 enabled = isValid && !isSaving
             ) {

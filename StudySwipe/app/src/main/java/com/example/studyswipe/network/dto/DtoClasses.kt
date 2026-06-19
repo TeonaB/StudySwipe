@@ -20,3 +20,8 @@ data class UsersResponse(
     @SerializedName("total_pages") val totalPages: Int,
     val data: List<UserDTO>
 )
+
+// Single user response mapping
+data class SingleUserResponse(
+    val data: UserDTO
+)

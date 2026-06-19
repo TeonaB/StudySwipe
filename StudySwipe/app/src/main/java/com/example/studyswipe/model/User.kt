@@ -1,7 +1,7 @@
 package com.example.studyswipe.model
 
 //Email: admin@studyswipe.com
-//Parolă (Password): admin
+//Parolă (Password): admin1
 
 enum class UserRole {
     STUDENT,
@@ -32,9 +32,8 @@ data class User(
     val email: String,
     val password: String,
     val role: UserRole = UserRole.STUDENT,
-    // Set în loc de List — nu poți adăuga aceeași materie de două ori
     val subjects: Set<Subject> = emptySet(),
     val bio: String = "",
-    // Flag care ne spune dacă utilizatorul a trecut prin ProfileSetupPage
+    val avatarUrl: String = "",
     val isProfileComplete: Boolean = false
 )
