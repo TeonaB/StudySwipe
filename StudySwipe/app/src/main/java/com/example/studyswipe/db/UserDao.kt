@@ -28,4 +28,7 @@ interface UserDao {
 
     @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): UserEntity?
+
+    @Query("SELECT COUNT(*) FROM users WHERE id LIKE 'student-%' OR id LIKE 'tutor-%' OR id LIKE 'both-%'")
+    suspend fun getApiUsersCount(): Int
 }

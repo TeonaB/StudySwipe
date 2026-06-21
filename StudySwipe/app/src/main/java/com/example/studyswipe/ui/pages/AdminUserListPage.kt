@@ -70,14 +70,33 @@ fun AdminUserListPage(
     role: UserRole,
     onBackClick: () -> Unit
 ) {
-    val apiUsers by authViewModel.apiUsers.collectAsState()
+    val allUsers by authViewModel.allUsers.collectAsState()
     val apiLoading by authViewModel.apiLoading.collectAsState()
     val apiError by authViewModel.apiError.collectAsState()
-    val totalPages by authViewModel.apiTotalPages.collectAsState()
-    val currentPage by authViewModel.apiCurrentPage.collectAsState()
 
     androidx.compose.runtime.LaunchedEffect(role) {
-        authViewModel.fetchUsersFromApi(page = 1, role = role)
+        authViewModel.importApiUsersIfNeeded()
+    }
+
+    // Filter users by role in the local DB, excluding admin
+    val filteredUsers = allUsers.filter { it.role == role && it.role != UserRole.ADMIN }
+
+    // In-memory pagination setup
+    val itemsPerPage = 5
+    val totalPages = maxOf(1, (filteredUsers.size + itemsPerPage - 1) / itemsPerPage)
+    var currentPage by remember { mutableStateOf(1) }
+
+    // Adjust currentPage if users list shrinks
+    if (currentPage > totalPages) {
+        currentPage = totalPages
+    }
+
+    val startIndex = (currentPage - 1) * itemsPerPage
+    val endIndex = minOf(startIndex + itemsPerPage, filteredUsers.size)
+    val paginatedUsers = if (startIndex < filteredUsers.size) {
+        filteredUsers.subList(startIndex, endIndex)
+    } else {
+        emptyList()
     }
 
     var selectedUserForDetails by remember { mutableStateOf<User?>(null) }
@@ -134,11 +153,11 @@ fun AdminUserListPage(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { authViewModel.fetchUsersFromApi(currentPage, role) }) {
+                    Button(onClick = { authViewModel.importApiUsersIfNeeded() }) {
                         Text("Reîncearcă")
                     }
                 }
-            } else if (apiUsers.isEmpty()) {
+            } else if (filteredUsers.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -160,7 +179,7 @@ fun AdminUserListPage(
                 ) {
                     item { Spacer(modifier = Modifier.height(8.dp)) }
 
-                    items(apiUsers, key = { it.id }) { user ->
+                    items(paginatedUsers, key = { it.id }) { user ->
                         AdminUserItem(
                             user = user,
                             onViewDetails = {
@@ -177,7 +196,7 @@ fun AdminUserListPage(
             }
 
             // Pagination controls row at the bottom
-            if (!apiLoading && apiError == null && apiUsers.isNotEmpty()) {
+            if (!apiLoading && apiError == null && filteredUsers.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -188,7 +207,7 @@ fun AdminUserListPage(
                     OutlinedButton(
                         onClick = {
                             if (currentPage > 1) {
-                                authViewModel.fetchUsersFromApi(currentPage - 1, role)
+                                currentPage--
                             }
                         },
                         enabled = currentPage > 1
@@ -205,7 +224,7 @@ fun AdminUserListPage(
                     OutlinedButton(
                         onClick = {
                             if (currentPage < totalPages) {
-                                authViewModel.fetchUsersFromApi(currentPage + 1, role)
+                                currentPage++
                             }
                         },
                         enabled = currentPage < totalPages

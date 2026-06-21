@@ -63,7 +63,7 @@ abstract class AppDatabase : RoomDatabase() {
                                     id = "admin-fixed-uuid",
                                     name = "Administrator",
                                     email = "admin@studyswipe.com",
-                                    password = "admin1",
+                                    password = "admin1g",
                                     role = com.example.studyswipe.model.UserRole.ADMIN,
                                     subjects = emptySet(),
                                     bio = "Cont de administrare sistem.",

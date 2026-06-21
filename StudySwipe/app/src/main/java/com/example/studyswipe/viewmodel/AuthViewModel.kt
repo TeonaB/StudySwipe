@@ -51,51 +51,47 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     val registerState: StateFlow<AuthResult> = _registerState.asStateFlow()
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
-    // HTTP API state for remote users
-    private val _apiUsers = MutableStateFlow<List<User>>(emptyList())
-    val apiUsers: StateFlow<List<User>> = _apiUsers.asStateFlow()
-
     private val _apiLoading = MutableStateFlow(false)
     val apiLoading: StateFlow<Boolean> = _apiLoading.asStateFlow()
 
     private val _apiError = MutableStateFlow<String?>(null)
     val apiError: StateFlow<String?> = _apiError.asStateFlow()
 
-    private val _apiTotalPages = MutableStateFlow(1)
-    val apiTotalPages: StateFlow<Int> = _apiTotalPages.asStateFlow()
-
-    private val _apiCurrentPage = MutableStateFlow(1)
-    val apiCurrentPage: StateFlow<Int> = _apiCurrentPage.asStateFlow()
-
-    fun fetchUsersFromApi(page: Int, role: UserRole) {
-        _apiLoading.value = true
-        _apiError.value = null
-        _apiCurrentPage.value = page
-        
+    fun importApiUsersIfNeeded() {
         viewModelScope.launch {
             try {
-                val response = RetrofitClient.usersApi.getUsers(page = page, perPage = 5)
-                val mappedUsers = response.data.map { dto ->
-                    dto.toUser(role)
+                val count = withContext(Dispatchers.IO) {
+                    userDao.getApiUsersCount()
                 }
-                
-                // Save to local Room DB on a background thread
-                withContext(Dispatchers.IO) {
-                    mappedUsers.forEach { user ->
-                        userDao.insert(user.toEntity())
-                        subjectDao.deleteUserSubjects(user.id)
-                        user.subjects.forEach { subject ->
-                            subjectDao.insertUserSubject(UserSubjectEntity(user.id, subject.name))
+                if (count == 0) {
+                    _apiLoading.value = true
+                    _apiError.value = null
+                    
+                    // Fetch all 12 users from API in one request
+                    val response = RetrofitClient.usersApi.getUsers(page = 1, perPage = 12)
+                    val mappedUsers = response.data.mapIndexed { index, dto ->
+                        val role = when {
+                            index < 4 -> UserRole.STUDENT
+                            index < 8 -> UserRole.TUTOR
+                            else -> UserRole.BOTH
+                        }
+                        dto.toUser(role)
+                    }
+                    
+                    // Save to local Room DB on a background thread
+                    withContext(Dispatchers.IO) {
+                        mappedUsers.forEach { user ->
+                            userDao.insert(user.toEntity())
+                            subjectDao.deleteUserSubjects(user.id)
+                            user.subjects.forEach { subject ->
+                                subjectDao.insertUserSubject(UserSubjectEntity(user.id, subject.name))
+                            }
                         }
                     }
                 }
-                
-                _apiUsers.value = mappedUsers
-                _apiTotalPages.value = response.totalPages
             } catch (e: Exception) {
                 e.printStackTrace()
                 _apiError.value = e.localizedMessage ?: "A apărut o eroare la descărcarea utilizatorilor"
-                _apiUsers.value = emptyList()
             } finally {
                 _apiLoading.value = false
             }
@@ -127,6 +123,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     private var messagesJob: kotlinx.coroutines.Job? = null
+    private var syncJob: kotlinx.coroutines.Job? = null
+    private var lastUserId: String? = null
 
     private val swipeDataFlow = combine(
         _likesFromMe,
@@ -198,34 +196,41 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         // Automatically sync matches, likes, and dislikes when the logged-in user changes
         viewModelScope.launch {
             currentUser.collect { user ->
-                if (user != null) {
-                    launch {
-                        chatDao.getMatchesForUser(user.id).collect {
-                            _matches.value = it
-                        }
-                    }
-                    launch {
-                        chatDao.getLikesForLiker(user.id).collect {
-                            _likesFromMe.value = it
-                        }
-                    }
-                    launch {
-                        chatDao.getLikesForLiked(user.id).collect {
-                            _likesToMe.value = it
-                        }
-                    }
-                    launch {
-                        chatDao.getDislikesForDisliker(user.id).collect {
-                            _dislikesFromMe.value = it
-                        }
-                    }
-                } else {
+                if (user == null) {
+                    syncJob?.cancel()
+                    syncJob = null
+                    lastUserId = null
                     _matches.value = emptyList()
                     _activeChatMessages.value = emptyList()
                     activeMatchId = null
                     _likesFromMe.value = emptyList()
                     _likesToMe.value = emptyList()
                     _dislikesFromMe.value = emptyList()
+                } else if (user.id != lastUserId) {
+                    syncJob?.cancel()
+                    lastUserId = user.id
+                    syncJob = launch {
+                        launch {
+                            chatDao.getMatchesForUser(user.id).collect {
+                                _matches.value = it
+                            }
+                        }
+                        launch {
+                            chatDao.getLikesForLiker(user.id).collect {
+                                _likesFromMe.value = it
+                            }
+                        }
+                        launch {
+                            chatDao.getLikesForLiked(user.id).collect {
+                                _likesToMe.value = it
+                            }
+                        }
+                        launch {
+                            chatDao.getDislikesForDisliker(user.id).collect {
+                                _dislikesFromMe.value = it
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -368,9 +373,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 // Delete user record
                 userDao.deleteById(userId)
                 
-                // Also remove from the apiUsers state flow in-memory
-                _apiUsers.value = _apiUsers.value.filter { it.id != userId }
-                
                 withContext(Dispatchers.Main) {
                     onCompleted()
                 }
@@ -418,19 +420,6 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 subjectDao.deleteUserSubjects(targetUserId)
                 subjects.forEach { subject ->
                     subjectDao.insertUserSubject(UserSubjectEntity(targetUserId, subject.name))
-                }
-
-                // Also update the apiUsers state flow in-memory
-                _apiUsers.value = _apiUsers.value.map {
-                    if (it.id == targetUserId) {
-                        it.copy(
-                            name = name.trim(),
-                            email = emailClean,
-                            password = password,
-                            subjects = subjects,
-                            bio = bio.trim()
-                        )
-                    } else it
                 }
 
                 withContext(Dispatchers.Main) {
